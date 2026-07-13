@@ -1,0 +1,565 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KPI Head Outlet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  :root{
+    --paper:#F5F6F4; --card:#FFFFFF; --ink:#16191C; --ink-soft:#5C636B; --ink-faint:#8B9299;
+    --rule:#DCDFDA; --rule-strong:#B9BEB7;
+    --good:#1F6F4A; --warn:#B87514; --bad:#B03A2E;
+    --accent:#2B4C7E; --accent-bg:#EAEFF6; --shadow:0 1px 2px rgba(22,25,28,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:0 0 80px}
+  .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+  header{border-bottom:1px solid var(--rule);background:var(--card);position:sticky;top:0;z-index:20}
+  .mast{display:flex;align-items:baseline;gap:14px;padding:18px 0 0;flex-wrap:wrap}
+  .mast h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.02em}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .period{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .period input{width:190px}
+  nav{display:flex;gap:2px;margin-top:16px}
+  nav button{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;color:var(--ink-faint);cursor:pointer}
+  nav button:hover{color:var(--ink)}
+  nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+  nav button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  section{display:none;padding-top:26px}
+  section.on{display:block}
+  .panel{background:var(--card);border:1px solid var(--rule);border-radius:3px;box-shadow:var(--shadow);margin-bottom:18px}
+  .panel-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid var(--rule)}
+  .panel-head h2{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .panel-head .hint{font-size:12px;color:var(--ink-faint);margin-left:auto}
+  .panel-body{padding:16px}
+
+  label{display:block;font-size:11px;font-weight:500;color:var(--ink-soft);margin-bottom:5px}
+  input,select{font-family:'IBM Plex Mono',monospace;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--rule-strong);border-radius:2px;padding:7px 9px;width:100%}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  input[type=number]{text-align:right}
+  button.btn{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:2px;padding:8px 14px;cursor:pointer}
+  button.btn:hover{background:#000}
+  button.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule-strong)}
+  button.btn.ghost:hover{background:var(--paper)}
+  button.btn.tiny{padding:5px 9px;font-size:10px}
+  button.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  table{width:100%;border-collapse:collapse}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:0 10px 8px;border-bottom:1px solid var(--rule)}
+  th.num,td.num{text-align:right}
+  td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  td.outlet{font-weight:500;white-space:nowrap}
+  th small{display:block;text-transform:none;letter-spacing:0;font-size:9.5px;color:var(--rule-strong);margin-top:2px}
+
+  /* ---- dropzone: the signature ---- */
+  .drop{
+    border:2px dashed var(--rule-strong);border-radius:4px;background:var(--card);
+    padding:26px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .drop:hover,.drop.hot{border-color:var(--accent);background:var(--accent-bg)}
+  .drop h3{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:4px}
+  .drop p{font-size:12.5px;color:var(--ink-faint)}
+  .drop .mini{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-faint);margin-top:10px}
+
+  .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+  .slot{border:1px solid var(--rule);border-radius:3px;padding:12px 13px;background:#FAFBFA}
+  .slot.ok{border-color:var(--good);background:#F1F7F3}
+  .slot .st{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+  .slot.ok .st{color:var(--good)}
+  .slot .nm{font-weight:600;font-size:13px;margin:5px 0 3px}
+  .slot .fills{font-size:11.5px;color:var(--ink-soft)}
+  .slot .fn{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-faint);margin-top:7px;word-break:break-all;line-height:1.4}
+  .slot .fn b{color:var(--ink-soft);font-weight:500}
+  .slot .res{font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule-strong);color:var(--ink-soft)}
+  .slot .res div{display:flex;justify-content:space-between;padding:1px 0}
+  .slot select{margin-top:8px;font-size:11.5px;padding:5px 7px}
+
+  .flag{background:#FDF3E3;border:1px solid #E8CFA0;color:#7A4E08;padding:9px 12px;border-radius:2px;font-size:12.5px;margin-top:14px;display:flex;gap:10px;align-items:center}
+  .flag button{flex-shrink:0;margin-left:auto}
+  .flag:empty{display:none}
+
+  .tape{background:var(--card);border:1px solid var(--rule);border-radius:3px;box-shadow:var(--shadow);padding:26px 26px 8px;font-family:'IBM Plex Mono',monospace;max-width:560px}
+  .tape-head{text-align:center;padding-bottom:18px;border-bottom:1px dashed var(--rule-strong)}
+  .tape-head .t1{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint)}
+  .tape-head .t2{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;margin-top:4px}
+  .tape-head .t3{font-size:11px;color:var(--ink-faint);margin-top:2px}
+  .line{padding:13px 0 12px;border-bottom:1px dashed var(--rule)}
+  .line-top{display:flex;align-items:baseline;gap:6px}
+  .line-name{font-size:12.5px;font-weight:500;white-space:nowrap}
+  .leader{flex:1;border-bottom:1px dotted var(--rule-strong);transform:translateY(-3px)}
+  .line-score{font-size:13px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .line-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:baseline;font-size:10.5px;color:var(--ink-faint);margin-top:5px}
+  .line-meta b{font-weight:600;color:var(--ink-soft)}
+  .bar{height:3px;background:var(--rule);margin-top:7px;border-radius:2px;overflow:hidden}
+  .bar span{display:block;height:100%;border-radius:2px}
+  .g{color:var(--good)} .w{color:var(--warn)} .b{color:var(--bad)}
+  .bg-g{background:var(--good)} .bg-w{background:var(--warn)} .bg-b{background:var(--bad)}
+  .total{margin-top:6px;padding:16px 0 20px;border-top:3px double var(--ink);display:flex;align-items:flex-end;gap:12px}
+  .total .lbl{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+  .total .val{margin-left:auto;text-align:right;font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  .total .val small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .settings-row{display:grid;grid-template-columns:1.6fr .7fr .9fr .9fr 1.1fr;gap:10px;padding:11px 0;border-bottom:1px solid var(--rule);align-items:end}
+  .settings-row:last-of-type{border-bottom:0}
+  .settings-row .nm{font-size:13px;font-weight:500;padding-bottom:7px}
+  .settings-row .nm i{display:block;font-style:normal;font-size:10.5px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;margin-top:2px}
+  .warnbox{background:#FDF3E3;border:1px solid #E8CFA0;color:#7A4E08;padding:9px 12px;border-radius:2px;font-size:12px;margin-top:12px}
+  .warnbox:empty{display:none}
+  details{border-top:1px solid var(--rule);padding:12px 16px 4px}
+  summary{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);cursor:pointer}
+  summary:hover{color:var(--ink)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;transition:transform .22s ease;z-index:80;max-width:90vw;text-align:center}
+  .toast.on{transform:translateX(-50%) translateY(0)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  @media (max-width:860px){
+    .grid2{grid-template-columns:1fr}
+    .slots{grid-template-columns:1fr}
+    .settings-row{grid-template-columns:1fr 1fr;gap:8px}
+    .total .val{font-size:32px}
+    .period{margin-left:0;width:100%;padding-bottom:4px}
+    .scroll{overflow-x:auto}
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="mast">
+      <a href="index.html" class="mono" style="color:var(--ink-faint);text-decoration:none;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--rule-strong);border-radius:3px;padding:5px 9px;">← Hub</a>
+      <div><div class="eyebrow">Generator Penilaian · Konsolidasi Multi-Outlet</div><h1>KPI Head Outlet</h1></div>
+      <div class="period"><label style="margin:0">Periode</label><input id="period" class="mono" value="26 Jun – 25 Jul 2026"></div>
+    </div>
+    <nav role="tablist">
+      <button role="tab" data-tab="data" aria-selected="true">Data</button>
+      <button role="tab" data-tab="hasil" aria-selected="false">Hasil</button>
+      <button role="tab" data-tab="setelan" aria-selected="false">Pengaturan</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <section id="tab-data" class="on">
+    <div class="panel">
+      <div class="panel-head"><h2>1 · Unggah berkas</h2><div class="hint">Berkas dikenali otomatis dari isinya. Bisa sekaligus banyak.</div></div>
+      <div class="panel-body">
+        <div class="drop" id="drop" tabindex="0" role="button">
+          <h3>Tarik berkas ke sini, atau klik untuk memilih</h3>
+          <p>Ekspor Baus, Olsera, dan Absensi — sekaligus juga boleh</p>
+          <div class="mini">.csv · .xlsx</div>
+          <input type="file" id="file" multiple accept=".csv,.tsv,.txt,.xlsx,.xls" hidden>
+        </div>
+        <div class="slots" id="slots"></div>
+        <div class="flag" id="flag"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>2 · Isi yang tidak ada di sistem</h2><div class="hint">Hanya 4 kolom — sisanya dari berkas.</div></div>
+      <div class="panel-body scroll" id="manual"></div>
+      <details>
+        <summary>Lihat angka mentah tiap KPI</summary>
+        <div id="raw" style="padding:10px 0 8px"></div>
+      </details>
+    </div>
+  </section>
+
+  <section id="tab-hasil">
+    <div class="grid2">
+      <div>
+        <div class="tape" id="tape"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn ghost" id="btn-copy">Salin ringkasan</button>
+          <button class="btn ghost" id="btn-csv">Unduh CSV</button>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <div class="panel-head"><h2>Rincian per outlet</h2><div class="hint">Diagnostik — tidak dinilai terpisah</div></div>
+          <div class="panel-body scroll" style="padding:16px 0 4px" id="per-outlet"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Cara skor dihitung</h2></div>
+          <div class="panel-body" style="font-size:12.5px;color:var(--ink-soft);line-height:1.65">
+            <p class="mono" style="font-size:11.5px;color:var(--ink);background:var(--paper);padding:9px 11px;border-radius:2px;margin-bottom:10px">skor = (aktual − floor) ÷ (target − floor)</p>
+            <p>Di bawah <b>floor</b> mendapat 0. Di atas <b>target</b> mendapat 100%, kecuali Sales yang bisa sampai 120%.</p>
+            <p style="margin-top:9px">Fraud Stock terbalik — makin kecil makin baik — jadi rumusnya <span class="mono">(floor − aktual) ÷ (floor − target)</span>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-setelan">
+    <div class="panel">
+      <div class="panel-head"><h2>Metrik &amp; bobot</h2><div class="hint">Perubahan langsung dipakai saat menghitung.</div></div>
+      <div class="panel-body">
+        <div class="settings-row" style="border-bottom:1px solid var(--rule-strong);padding-bottom:7px">
+          <div class="eyebrow">KPI</div><div class="eyebrow">Bobot</div><div class="eyebrow">Target</div><div class="eyebrow">Floor</div><div class="eyebrow">Skor maks</div>
+        </div>
+        <div id="cfg-rows"></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+          <div class="mono" style="font-size:12px">Total bobot: <b id="wsum">100%</b></div>
+          <button class="btn ghost tiny" id="btn-reset" style="margin-left:auto">Kembalikan ke setelan awal</button>
+        </div>
+        <div class="warnbox" id="wwarn"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Outlet</h2></div>
+      <div class="panel-body" id="outlet-box"></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= konfigurasi ================= */
+const DEFAULT_CFG = [
+  {id:'packing',no:1,name:'Ketepatan Packing',      weight:20,target:99.5,floor:97, max:100,inverse:false,dg:2,num:'Order packing benar',den:'Total order packing'},
+  {id:'formasi',no:2,name:'Pemenuhan Formasi Jadwal',weight:10,target:100, floor:90, max:100,inverse:false,dg:1,num:'Slot shift terisi',   den:'Slot shift dibutuhkan'},
+  {id:'waktu',  no:3,name:'Ketepatan Waktu Packing', weight:15,target:95,  floor:85, max:100,inverse:false,dg:2,num:'Order tepat waktu',    den:'Total order packing'},
+  {id:'sales',  no:4,name:'Target Sales',            weight:10,target:100, floor:80, max:120,inverse:false,dg:1,num:'Sales aktual (Rp)',    den:'Target sales (Rp)'},
+  {id:'fraud',  no:5,name:'Fraud Stock',             weight:20,target:0.10,floor:0.15,max:100,inverse:true, dg:3,num:'Fraud stock (Rp)',    den:'Omzet (Rp)',lockDen:'sales'},
+  {id:'setoran',no:6,name:'Ketepatan Setoran',       weight:25,target:100, floor:97, max:100,inverse:false,dg:1,num:'Setoran tepat',        den:'Total setoran'}
+];
+const SOURCES = [
+  {id:'baus', nm:'Baus — Performance CnW', fills:'KPI 1 Ketepatan Packing · KPI 3 Waktu Packing',
+   fn:'cnw_performance_combined_stats_<b>2026-06-26</b>_to_<b>2026-07-25</b>.csv'},
+  {id:'olsera', nm:'Olsera — Rincian Penjualan', fills:'KPI 4 Sales · omzet KPI 5 · kas wajib setor',
+   fn:'Rincian_Penjualan-<b>2026-06-26</b>__<b>2026-07-25</b>.xlsx<br>Satu berkas per outlet — unggah semuanya.'},
+  {id:'absensi', nm:'Dashboard Master Absensi', fills:'KPI 2 slot shift terisi',
+   fn:'DASHBOARD_MASTER_ABSENSI.xlsx'}
+];
+const blankData=()=>{const o={};DEFAULT_CFG.forEach(c=>o[c.id]={n:0,d:0});return o;};
+const mk=(name)=>({name,cash:0,d:blankData()});
+const DEFAULT_OUTLETS=[mk('Corner Jebres'),mk('Corner Yamin'),mk('Corner Kartasura')];
+
+let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
+let outlets=JSON.parse(JSON.stringify(DEFAULT_OUTLETS));
+let period='26 Jun – 25 Jul 2026';
+let loaded={};      // {baus:{file,summary}, olsera:{...}, absensi:{...}}
+let orphans=[];     // divisi absensi yang tak cocok outlet mana pun
+
+const $=id=>document.getElementById(id);
+const K=id=>cfg.find(c=>c.id===id);
+const fmt=(v,dg=0)=>(isFinite(v)?v:0).toLocaleString('id-ID',{minimumFractionDigits:dg,maximumFractionDigits:dg});
+const rp=v=>'Rp '+fmt(Math.round(v||0));
+const norm=s=>String(s??'').trim();
+const toNum=v=>{ if(typeof v==='number') return isFinite(v)?v:0; const x=parseFloat(norm(v).replace(/[^0-9.\-]/g,'')); return isFinite(x)?x:0; };
+const STOP=['cnw','corner','outlet','cabang','cashier','n','waiters','driver','store','rincian','penjualan','data'];
+const TOK=s=>norm(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').split(' ').filter(w=>w&&!STOP.includes(w));
+function matchOutlet(txt){ const t=TOK(txt); let hit=-1; outlets.forEach((o,i)=>{ if(TOK(o.name).some(w=>t.includes(w))) hit=i; }); return hit; }
+
+/* ================= simpan ================= */
+async function save(){ try{ await window.storage.set('kpi-ho:v3',JSON.stringify({cfg,outlets,period,loaded})); }catch(e){} }
+async function load(){ try{ const r=await window.storage.get('kpi-ho:v3'); if(r&&r.value){ const p=JSON.parse(r.value);
+  if(p.cfg)cfg=p.cfg; if(p.outlets)outlets=p.outlets; if(p.period)period=p.period; if(p.loaded)loaded=p.loaded; } }catch(e){} }
+
+/* ================= skor ================= */
+function actual(c){ let n=0,d=0; outlets.forEach(o=>{const x=o.d[c.id]||{n:0,d:0}; n+=+x.n||0; d+=+x.d||0;}); return d?(n/d)*100:null; }
+function scoreOf(c,a){
+  if(a===null) return null;
+  const span=c.inverse?(c.floor-c.target):(c.target-c.floor);
+  if(!span) return a>=c.target?100:0;
+  const s=c.inverse?((c.floor-a)/span)*100:((a-c.floor)/span)*100;
+  return Math.max(0,Math.min(c.max,s));
+}
+const tone=s=>s===null?'':s>=90?'g':s>=60?'w':'b';
+function syncLocks(){ cfg.filter(c=>c.lockDen).forEach(c=>outlets.forEach(o=>{o.d[c.id]=o.d[c.id]||{n:0,d:0}; o.d[c.id].d=o.d[c.lockDen]?.n||0;})); }
+
+/* ================= unggah ================= */
+const drop=$('drop'), fileInput=$('file');
+drop.onclick=()=>fileInput.click();
+drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();fileInput.click();} };
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
+drop.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
+fileInput.onchange=e=>{ handleFiles([...e.target.files]); e.target.value=''; };
+
+function handleFiles(files){
+  if(!files.length) return;
+  let done=0, msgs=[];
+  files.forEach(f=>{
+    readFile(f).then(res=>{
+      msgs.push(res);
+      if(++done===files.length){ fullRefresh(); toast(msgs.join(' · ')); }
+    }).catch(err=>{
+      msgs.push(`${f.name}: ${err.message}`);
+      if(++done===files.length){ fullRefresh(); toast(msgs.join(' · ')); }
+    });
+  });
+}
+function readFile(f){
+  return new Promise((res,rej)=>{
+    const ext=f.name.split('.').pop().toLowerCase();
+    if(['csv','tsv','txt'].includes(ext)){
+      Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>{
+        const cols=(r.meta.fields||[]).map(norm);
+        const rows=r.data.map(row=>{const o={};Object.keys(row).forEach(k=>o[norm(k)]=row[k]);return o;});
+        try{ res(route(f.name,cols,rows,null)); }catch(e){ rej(e); }
+      },error:()=>rej(new Error('gagal dibaca'))});
+    } else {
+      const rd=new FileReader();
+      rd.onload=ev=>{
+        try{
+          const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+          const pick = wb.SheetNames.includes('DATA ABSENSI') ? 'DATA ABSENSI' : wb.SheetNames[0];
+          const arr=XLSX.utils.sheet_to_json(wb.Sheets[pick],{header:1,defval:'',raw:true});
+          let h=arr.findIndex(r=>r.filter(c=>norm(c)!=='').length>=3); if(h<0) h=0;
+          const cols=arr[h].map(norm).filter(Boolean);
+          const rows=arr.slice(h+1).filter(r=>r.some(c=>norm(c)!==''))
+            .map(r=>{const o={};cols.forEach((c,i)=>o[c]=r[i]);return o;});
+          res(route(f.name,cols,rows,pick));
+        }catch(e){ rej(new Error('gagal dibaca')); }
+      };
+      rd.onerror=()=>rej(new Error('gagal dibaca'));
+      rd.readAsArrayBuffer(f);
+    }
+  });
+}
+
+/* --- deteksi jenis berkas dari isinya --- */
+function route(fname,cols,rows,sheet){
+  const has=c=>cols.includes(c);
+  if(has('total_packing') && has('barang_salah_count')) return doBaus(fname,rows);
+  if(has('order no') && has('total amount'))            return doOlsera(fname,rows);
+  if(has('Divisi') && has('Jenis Absen'))               return doAbsensi(fname,rows);
+  throw new Error('format tidak dikenali');
+}
+
+function doBaus(fname,rows){
+  const hit=[];
+  rows.forEach(r=>{
+    const oi=matchOutlet(r['name']); if(oi<0) return;
+    const tot=toNum(r['total_packing']), salah=toNum(r['barang_salah_count']), pct=toNum(r['packing_on_time_percentage']);
+    outlets[oi].d.packing={n:Math.max(0,tot-salah), d:tot};
+    outlets[oi].d.waktu  ={n:Math.round(tot*pct/100), d:tot};
+    hit.push(`${outlets[oi].name}: ${fmt(tot)} order, ${fmt(salah)} salah`);
+  });
+  if(!hit.length) throw new Error('nama outlet tidak cocok');
+  loaded.baus={file:fname, lines:hit};
+  return `Baus terbaca (${hit.length} outlet)`;
+}
+
+function doOlsera(fname,rows){
+  let oi=matchOutlet(fname);
+  if(oi<0) oi=matchOutlet(rows.map(r=>norm(r['served by'])).join(' '));
+  let sales=0, cash=0, dmin=null, dmax=null;
+  rows.forEach(r=>{
+    const amt=toNum(r['total amount']); sales+=amt;
+    if(/cash/i.test(norm(r['payment mode']))) cash+=amt;
+    const d=norm(r['order date']).slice(0,10);
+    if(d){ if(!dmin||d<dmin)dmin=d; if(!dmax||d>dmax)dmax=d; }
+  });
+  const rec={file:fname, sales, cash, range:(dmin&&dmax)?`${dmin} → ${dmax}`:'', outlet:oi};
+  loaded.olsera=loaded.olsera||{files:[]};
+  loaded.olsera.files=loaded.olsera.files.filter(x=>x.file!==fname);
+  loaded.olsera.files.push(rec);
+  applyOlsera();
+  return oi<0 ? `Olsera terbaca ${rp(sales)} — pilih outletnya` : `Olsera ${outlets[oi].name} ${rp(sales)}`;
+}
+function applyOlsera(){
+  (loaded.olsera?.files||[]).forEach(f=>{
+    if(f.outlet>=0 && outlets[f.outlet]){
+      outlets[f.outlet].d.sales.n=f.sales;
+      outlets[f.outlet].cash=f.cash;
+    }
+  });
+  syncLocks();
+}
+
+function doAbsensi(fname,rows){
+  const seen=outlets.map(()=>new Set());
+  const unknown=new Set(); let used=0;
+  rows.forEach(r=>{
+    const div=norm(r['Divisi']);
+    if(!/cashier\s*n\s*waiters/i.test(div)) return;
+    if(norm(r['Jenis Absen']).toUpperCase()!=='MASUK') return;
+    const oi=matchOutlet(div);
+    if(oi<0){ unknown.add(div); return; }
+    const day=norm(r['Tgl Absen Masuk']).slice(0,10) || norm(r['Timestamp']).slice(0,10);
+    seen[oi].add(norm(r['Nama Staff'])+'§'+day); used++;
+  });
+  if(!used && !unknown.size) throw new Error('tidak ada baris Cashier n Waiters');
+  const lines=[];
+  seen.forEach((s,i)=>{ outlets[i].d.formasi.n=s.size; if(s.size) lines.push(`${outlets[i].name}: ${s.size} slot terisi`); });
+  orphans=[...unknown];
+  loaded.absensi={file:fname, lines};
+  return `Absensi terbaca (${fmt(used)} kehadiran)`;
+}
+
+/* ================= render ================= */
+function renderSlots(){
+  $('slots').innerHTML=SOURCES.map(s=>{
+    let ok=false, res='', sel='';
+    if(s.id==='baus' && loaded.baus){ ok=true; res=loaded.baus.lines.map(l=>`<div><span>${l}</span></div>`).join(''); }
+    if(s.id==='absensi' && loaded.absensi){ ok=true; res=loaded.absensi.lines.map(l=>`<div><span>${l}</span></div>`).join('')||'<div>tidak ada kehadiran cocok</div>'; }
+    if(s.id==='olsera' && loaded.olsera?.files?.length){
+      const fs=loaded.olsera.files; ok=fs.every(f=>f.outlet>=0);
+      res=fs.map((f,i)=>`<div><span>${f.outlet>=0?outlets[f.outlet].name:'<i>belum dipilih</i>'}</span><span>${rp(f.sales)}</span></div>`
+        + (f.outlet<0?`<select data-of="${i}"><option value="-1">— Pilih outlet —</option>${outlets.map((o,oi)=>`<option value="${oi}">${o.name}</option>`).join('')}</select>`:'')).join('');
+    }
+    return `<div class="slot ${ok?'ok':''}">
+      <div class="st">${ok?'✓ Terbaca':'○ Belum ada'}</div>
+      <div class="nm">${s.nm}</div>
+      <div class="fills">${s.fills}</div>
+      <div class="fn"><b>Contoh nama berkas</b><br>${s.fn}</div>
+      ${res?`<div class="res">${res}</div>`:''}
+    </div>`;
+  }).join('');
+  $('slots').querySelectorAll('select[data-of]').forEach(el=> el.onchange=e=>{
+    loaded.olsera.files[+e.target.dataset.of].outlet=+e.target.value;
+    applyOlsera(); fullRefresh();
+  });
+  const f=$('flag');
+  if(orphans.length){
+    f.innerHTML=`Divisi <b>${orphans.join(', ')}</b> ada di absensi tapi belum terdaftar sebagai outlet. Kehadirannya belum dihitung.
+      <button class="btn tiny" id="add-orph">Tambahkan sebagai outlet</button>`;
+    $('add-orph').onclick=()=>{
+      orphans.forEach(d=>{
+        const nm=d.replace(/cashier\s*n\s*waiters\s*/i,'').trim();
+        if(!outlets.some(o=>o.name.toLowerCase()===nm.toLowerCase())) outlets.push(mk(nm));
+      });
+      orphans=[]; fullRefresh(); toast('Outlet ditambahkan — unggah ulang absensi untuk mengisi datanya');
+    };
+  } else f.innerHTML='';
+}
+
+function renderManual(){
+  const sc=K('setoran');
+  $('manual').innerHTML=`<table><thead><tr>
+      <th>Outlet</th>
+      <th class="num">Target sales<small>Rp, periode ini</small></th>
+      <th class="num">Slot dibutuhkan<small>dari roster</small></th>
+      <th class="num">Fraud stock<small>Rp, dari Finance</small></th>
+      <th class="num">Setoran tepat<small>jumlah kejadian</small></th>
+      <th class="num">Total setoran<small>jumlah kejadian</small></th>
+    </tr></thead><tbody>${outlets.map((o,i)=>`<tr>
+      <td class="outlet">${o.name}
+        ${o.cash?`<div class="mono" style="font-size:10px;color:var(--ink-faint)">kas wajib setor ${rp(o.cash)}</div>`:''}
+      </td>
+      <td class="num"><input type="number" value="${o.d.sales.d||0}"   data-m="salesTarget" data-i="${i}"></td>
+      <td class="num"><input type="number" value="${o.d.formasi.d||0}" data-m="slot"        data-i="${i}"></td>
+      <td class="num"><input type="number" value="${o.d.fraud.n||0}"   data-m="fraud"       data-i="${i}"></td>
+      <td class="num"><input type="number" value="${o.d.setoran.n||0}" data-m="setOk"       data-i="${i}"></td>
+      <td class="num"><input type="number" value="${o.d.setoran.d||0}" data-m="setAll"      data-i="${i}"></td>
+    </tr>`).join('')}</tbody></table>
+    <p style="font-size:11.5px;color:var(--ink-faint);padding:10px 0 0">Slot dibutuhkan = jumlah shift × staff per shift × jumlah hari. Kas wajib setor dihitung dari Olsera (CASH + CASH DELIVERY) sebagai pembanding setoran riil.</p>`;
+  $('manual').querySelectorAll('input[data-m]').forEach(el=> el.oninput=e=>{
+    const i=+e.target.dataset.i, v=+e.target.value||0;
+    const o=outlets[i];
+    ({salesTarget:()=>o.d.sales.d=v, slot:()=>o.d.formasi.d=v, fraud:()=>o.d.fraud.n=v,
+      setOk:()=>o.d.setoran.n=v, setAll:()=>o.d.setoran.d=v})[e.target.dataset.m]();
+    softRefresh();
+  });
+}
+function renderRaw(){
+  $('raw').innerHTML=`<table><thead><tr><th>Outlet</th>${cfg.map(c=>`<th class="num">K${c.no}<small>${c.num.split(' (')[0]} / ${c.den.split(' (')[0]}</small></th>`).join('')}</tr></thead>
+    <tbody>${outlets.map(o=>`<tr><td class="outlet">${o.name}</td>${cfg.map(c=>{
+      const x=o.d[c.id]||{n:0,d:0};
+      return `<td class="num mono" style="font-size:11.5px">${fmt(x.n)} / ${fmt(x.d)}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function renderOutlets(){
+  $('outlet-box').innerHTML=`<table><thead><tr><th>Nama outlet</th><th style="width:44px"></th></tr></thead>
+    <tbody>${outlets.map((o,i)=>`<tr>
+      <td><input value="${o.name}" data-oi="${i}" style="font-family:Inter"></td>
+      <td class="num"><button class="btn ghost tiny" data-del="${i}" ${outlets.length<2?'disabled':''}>Hapus</button></td></tr>`).join('')}</tbody></table>
+    <button class="btn ghost tiny" id="add-outlet" style="margin-top:12px">+ Tambah outlet</button>`;
+  $('outlet-box').querySelectorAll('input[data-oi]').forEach(el=> el.oninput=e=>{ outlets[+e.target.dataset.oi].name=e.target.value; softRefresh(); renderManual(); });
+  $('outlet-box').querySelectorAll('[data-del]').forEach(el=> el.onclick=e=>{ outlets.splice(+e.target.dataset.del,1); fullRefresh(); });
+  $('add-outlet').onclick=()=>{ outlets.push(mk('Outlet baru')); fullRefresh(); };
+}
+function renderTape(){
+  syncLocks();
+  let total=0,weighted=0;
+  const lines=cfg.map(c=>{
+    const a=actual(c), s=scoreOf(c,a), k=s===null?0:(s/100)*c.weight;
+    total+=c.weight; weighted+=k;
+    const t=tone(s);
+    return `<div class="line">
+      <div class="line-top"><span class="line-name">${c.no}. ${c.name}</span><span class="leader"></span>
+        <span class="line-score ${t}">${s===null?'—':fmt(k,1)+' / '+c.weight}</span></div>
+      <div class="line-meta"><span>Aktual <b>${a===null?'belum ada data':fmt(a,c.dg)+'%'}</b></span><span>·</span>
+        <span>Target ${fmt(c.target,c.dg)}%</span><span>·</span><span>Floor ${fmt(c.floor,c.dg)}%</span><span>·</span>
+        <span>Skor <b class="${t}">${s===null?'—':fmt(s,0)+'%'}</b></span></div>
+      <div class="bar"><span class="bg-${t||'w'}" style="width:${s===null?0:Math.min(100,s)}%"></span></div></div>`;
+  }).join('');
+  const t=tone(total?weighted/(total/100):0);
+  const grade=weighted>=90?'Sangat baik':weighted>=75?'Baik':weighted>=60?'Perlu perbaikan':'Di bawah standar';
+  $('tape').innerHTML=`<div class="tape-head"><div class="t1">Penilaian Kinerja</div><div class="t2">Head Outlet</div>
+      <div class="t3">${period} · ${outlets.length} outlet · konsolidasi</div></div>${lines}
+    <div class="total"><div><div class="lbl">Skor akhir</div>
+      <div class="mono" style="font-size:11px;color:var(--ink-faint);margin-top:4px">${grade} · bobot ${fmt(total)}%</div></div>
+      <div class="val ${t}">${fmt(weighted,1)}<small>dari ${fmt(total)} poin</small></div></div>`;
+}
+function renderPerOutlet(){
+  $('per-outlet').innerHTML=`<table><thead><tr><th>Outlet</th>${cfg.map(c=>`<th class="num">K${c.no}</th>`).join('')}</tr></thead>
+    <tbody>${outlets.map(o=>`<tr><td class="outlet">${o.name}</td>${cfg.map(c=>{
+      const x=o.d[c.id]||{n:0,d:0};
+      if(!+x.d) return `<td class="num mono" style="color:var(--ink-faint)">—</td>`;
+      const v=(x.n/x.d)*100;
+      return `<td class="num mono ${tone(scoreOf(c,v))}">${fmt(v,c.dg)}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>
+    <p style="font-size:11.5px;color:var(--ink-faint);padding:10px 16px 0">Angka dalam persen. <b>Skor resmi hanya dari konsolidasi</b> — outlet besar otomatis berbobot lebih besar.</p>`;
+}
+function renderCfg(){
+  $('cfg-rows').innerHTML=cfg.map((c,i)=>`<div class="settings-row">
+    <div class="nm">${c.no}. ${c.name}<i>${c.inverse?'makin kecil makin baik':'makin besar makin baik'}</i></div>
+    <div><label>Bobot %</label><input type="number" step="any" value="${c.weight}" data-c="${i}" data-f="weight"></div>
+    <div><label>Target</label><input type="number" step="any" value="${c.target}" data-c="${i}" data-f="target"></div>
+    <div><label>Floor</label><input type="number" step="any" value="${c.floor}" data-c="${i}" data-f="floor"></div>
+    <div><label>Skor maks %</label><input type="number" step="any" value="${c.max}" data-c="${i}" data-f="max"></div></div>`).join('');
+  $('cfg-rows').querySelectorAll('input[data-c]').forEach(el=> el.oninput=e=>{
+    cfg[+e.target.dataset.c][e.target.dataset.f]=+e.target.value||0; softRefresh(); wsum();
+  });
+  wsum();
+}
+function wsum(){
+  const s=cfg.reduce((a,c)=>a+(+c.weight||0),0);
+  $('wsum').textContent=fmt(s)+'%';
+  $('wwarn').textContent=s===100?'':`Total bobot ${fmt(s)}% — belum 100%. Skor akhir tetap dihitung, tapi tidak bisa dibaca sebagai persen.`;
+}
+
+/* ================= ekspor ================= */
+$('btn-copy').onclick=()=>{
+  syncLocks(); let w=0;
+  const rows=cfg.map(c=>{ const a=actual(c),s=scoreOf(c,a),k=s===null?0:(s/100)*c.weight; w+=k;
+    return `${c.no}. ${c.name} — aktual ${a===null?'n/a':fmt(a,c.dg)+'%'} (target ${fmt(c.target,c.dg)}%) → ${fmt(k,1)}/${c.weight}`;}).join('\n');
+  navigator.clipboard.writeText(`KPI HEAD OUTLET · ${period}\n${outlets.map(o=>o.name).join(', ')}\n\n${rows}\n\nSKOR AKHIR: ${fmt(w,1)} / 100`)
+    .then(()=>toast('Ringkasan disalin')).catch(()=>toast('Gagal menyalin'));
+};
+$('btn-csv').onclick=()=>{
+  syncLocks(); let w=0;
+  const L=[['KPI','Bobot','Aktual (%)','Target','Floor','Skor (%)','Poin'].join(',')];
+  cfg.forEach(c=>{ const a=actual(c),s=scoreOf(c,a),k=s===null?0:(s/100)*c.weight; w+=k;
+    L.push([`"${c.no}. ${c.name}"`,c.weight,a===null?'':a.toFixed(3),c.target,c.floor,s===null?'':s.toFixed(1),k.toFixed(2)].join(','));});
+  L.push(['"SKOR AKHIR"','','','','','',w.toFixed(2)].join(','));
+  const url=URL.createObjectURL(new Blob([L.join('\n')],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url;
+  a.download=`kpi-head-outlet-${period.replace(/[\s–]+/g,'-').toLowerCase()}.csv`; a.click(); URL.revokeObjectURL(url);
+};
+
+/* ================= shell ================= */
+let tOut;
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tOut); tOut=setTimeout(()=>t.classList.remove('on'),3200); }
+document.querySelectorAll('nav button').forEach(b=> b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='tab-'+b.dataset.tab));
+  if(b.dataset.tab==='hasil'){ syncLocks(); renderTape(); renderPerOutlet(); }
+});
+$('period').oninput=e=>{ period=e.target.value; renderTape(); save(); };
+$('btn-reset').onclick=()=>{ cfg=JSON.parse(JSON.stringify(DEFAULT_CFG)); fullRefresh(); toast('Metrik dikembalikan ke setelan awal'); };
+
+function softRefresh(){ syncLocks(); renderTape(); renderPerOutlet(); renderRaw(); save(); }
+function fullRefresh(){ syncLocks(); renderSlots(); renderManual(); renderRaw(); renderOutlets(); renderCfg(); renderTape(); renderPerOutlet(); save(); }
+(async function init(){ await load(); $('period').value=period; applyOlsera(); fullRefresh(); })();
+</script>
