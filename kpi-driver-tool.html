@@ -818,6 +818,15 @@ function handleCSVImport(file){
 
 /* ---------- init & top-level listeners ---------- */
 function initApp(){
+  /* Fix: di Chrome, scroll mouse saat kursor berada di input angka yang sedang
+     fokus akan diam-diam mengubah nilainya (dianggap seperti tombol panah).
+     Ini menyebabkan angka bobot/target berubah sendiri saat admin scroll halaman.
+     Solusi: lepas fokus dari input angka begitu terdeteksi ada scroll. */
+  document.addEventListener("wheel", () => {
+    const el = document.activeElement;
+    if (el && el.tagName === "INPUT" && el.type === "number") el.blur();
+  }, { passive: true });
+
   document.getElementById("csvInput").addEventListener("change", e => {
     const f = e.target.files[0];
     if (f) handleCSVImport(f);
