@@ -300,6 +300,20 @@ let hasLateShiftData = false;
 
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
+/* Migrasi: pastikan KPI baru yang ditambahkan di kode tidak pernah hilang gara-gara
+   config lama (dari Firestore / file .json) yang disimpan sebelum KPI itu ada. */
+function mergeConfigWithDefaults(loaded){
+  const merged = deepClone(loaded || {});
+  if (!merged.kpis) merged.kpis = {};
+  Object.keys(DEFAULT_CONFIG.kpis).forEach(key => {
+    if (!merged.kpis[key]) merged.kpis[key] = deepClone(DEFAULT_CONFIG.kpis[key]);
+  });
+  Object.keys(DEFAULT_CONFIG).forEach(key => {
+    if (key !== "kpis" && merged[key] === undefined) merged[key] = DEFAULT_CONFIG[key];
+  });
+  return merged;
+}
+
 /* ===================== FIREBASE SYNC ===================== *
  * Ganti nilai di bawah ini dengan kredensial Firebase project kamu sendiri.
  * Kalau masih diisi placeholder "GANTI_...", tool otomatis jalan di Mode Lokal
@@ -349,7 +363,7 @@ function connectToOutletDoc(){
       fbConnectionState = "connected";
       if (snap.exists){
         const data = snap.data();
-        if (data.config) config = data.config;
+        if (data.config) config = mergeConfigWithDefaults(data.config);
         if (Array.isArray(data.drivers)) drivers = data.drivers;
         if (typeof data.periodeStart === "string") periodeStart = data.periodeStart;
         if (typeof data.periodeEnd === "string") periodeEnd = data.periodeEnd;
@@ -671,7 +685,7 @@ function attachConfigListeners(){
     reader.onload = ev => {
       try {
         const loaded = JSON.parse(ev.target.result);
-        config = loaded;
+        config = mergeConfigWithDefaults(loaded);
         saveState();
         alert("Konfigurasi berhasil dimuat" + (FIREBASE_ENABLED ? " dan disebarkan ke semua device." : "."));
       } catch(err){ alert("File konfigurasi tidak valid."); }
