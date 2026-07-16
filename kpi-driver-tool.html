@@ -165,6 +165,8 @@ body{padding:0 0 60px;}
 .pt-good{color:var(--success);}
 .pt-mid{color:var(--accent-dark);}
 .pt-bad{color:var(--danger);}
+.kpi-na{color:var(--ink-soft);font-style:italic;}
+.kpi-inactive-tag{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;background:var(--danger-bg);color:var(--danger);padding:2px 7px;border-radius:8px;margin-left:8px;}
 .skor-badge{font-family:var(--font-mono);font-weight:700;font-size:16px;}
 .rp{font-family:var(--font-mono);font-weight:600;color:var(--success);}
 .rp-zero{color:var(--ink-soft);font-weight:400;}
@@ -245,7 +247,7 @@ body{padding:0 0 60px;}
     <label class="btn btn-primary file-btn">Import CSV Performa Driver
       <input type="file" id="csvInput" accept=".csv" style="display:none;">
     </label>
-    <span class="import-hint">Kolom wajib: name, total_completed_shifts, total_batches, total_deliveries, total_delayed_batch_returns, total_delayed_order_deliveries, barang_salah_count</span>
+    <span class="import-hint">Kolom wajib: name, total_completed_shifts, total_batches, total_deliveries, total_delayed_batch_returns, total_delayed_order_deliveries, barang_salah_count · Opsional: total_late_shifts (untuk KPI Keterlambatan Datang Shift)</span>
   </div>
   <div id="importLockedHint" class="import-locked-hint">Masuk Mode Admin untuk mengimpor data performa driver terbaru.</div>
   <button class="btn btn-ghost" id="btnExportPdf">Export PDF (Cetak)</button>
@@ -274,14 +276,16 @@ const DEFAULT_CONFIG = {
   passingScore: 70,
   incentiveAmount: 300000,
   kpis: {
-    balikGudang: { label: "Ketepatan Waktu Balik Gudang", unit: "%", direction: "higher", weight: 31.25,
+    balikGudang: { label: "Ketepatan Waktu Balik Gudang", unit: "%", direction: "higher", weight: 25,
       tiers: [ {id:"t1", limit:55, points:60}, {id:"t2", limit:70, points:80}, {id:"t3", limit:85, points:100}, {id:"fallback", limit:null, points:40} ] },
-    telat: { label: "Orderan Telat Estim", unit: "%", direction: "lower", weight: 31.25,
+    telat: { label: "Orderan Telat Estim", unit: "%", direction: "lower", weight: 25,
       tiers: [ {id:"t1", limit:7, points:100}, {id:"t2", limit:10, points:80}, {id:"t3", limit:15, points:60}, {id:"fallback", limit:null, points:40} ] },
-    barangSalah: { label: "Barang Salah", unit: "per 100 antar", direction: "lower", weight: 25,
+    barangSalah: { label: "Barang Salah", unit: "per 100 antar", direction: "lower", weight: 20,
       tiers: [ {id:"t1", limit:0, points:100}, {id:"t2", limit:1, points:70}, {id:"fallback", limit:null, points:40} ] },
-    delivered: { label: "Rata-rata Delivered / Shift", unit: "paket", direction: "higher", weight: 12.5,
+    delivered: { label: "Rata-rata Delivered / Shift", unit: "paket", direction: "higher", weight: 10,
       tiers: [ {id:"t1", limit:6.5, points:60}, {id:"t2", limit:7.4, points:80}, {id:"t3", limit:9.0, points:100}, {id:"fallback", limit:null, points:40} ] },
+    keterlambatanShift: { label: "Keterlambatan Datang Shift", unit: "%", direction: "lower", weight: 20, optional: true,
+      tiers: [ {id:"t1", limit:10, points:100}, {id:"t2", limit:20, points:80}, {id:"t3", limit:33, points:60}, {id:"fallback", limit:null, points:40} ] },
   }
 };
 
@@ -292,6 +296,7 @@ let outletName = "Outlet Jebres";
 let periodeStart = "";
 let periodeEnd = "";
 let sortMode = "skor_desc";
+let hasLateShiftData = false;
 
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
@@ -348,6 +353,7 @@ function connectToOutletDoc(){
         if (Array.isArray(data.drivers)) drivers = data.drivers;
         if (typeof data.periodeStart === "string") periodeStart = data.periodeStart;
         if (typeof data.periodeEnd === "string") periodeEnd = data.periodeEnd;
+        if (typeof data.hasLateShiftData === "boolean") hasLateShiftData = data.hasLateShiftData;
       }
       updateConnectionBadge();
       renderAll();
@@ -368,6 +374,7 @@ function saveState(){
     drivers: drivers,
     periodeStart: periodeStart,
     periodeEnd: periodeEnd,
+    hasLateShiftData: hasLateShiftData,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   db.collection("kpiTool").doc(outletDocId()).set(payload, { merge: true })
@@ -424,6 +431,7 @@ const REQUIRED_COLS = ["name","total_completed_shifts","total_batches","total_de
 
 function mapDriver(row){
   const avgField = row["average_deliveries_per_shift"];
+  const lateField = row["total_late_shifts"];
   return {
     name: row["name"] || "(Tanpa Nama)",
     nip: row["nip"] || "",
@@ -433,6 +441,7 @@ function mapDriver(row){
     delayedBatchReturns: toNum(row["total_delayed_batch_returns"]),
     delayedOrderDeliveries: toNum(row["total_delayed_order_deliveries"]),
     barangSalah: toNum(row["barang_salah_count"]),
+    lateShifts: (lateField !== undefined && lateField !== "") ? toNum(lateField) : null,
     avgDeliveredPerShift: (avgField !== undefined && avgField !== "") ? toNum(avgField) : null,
     rangeStart: row["range_start"] || "",
     rangeEnd: row["range_end"] || "",
@@ -446,6 +455,7 @@ function computeMetrics(d){
     telatPct: d.totalDeliveries > 0 ? d.delayedOrderDeliveries / d.totalDeliveries * 100 : 0,
     barangSalahRate: d.totalDeliveries > 0 ? d.barangSalah / d.totalDeliveries * 100 : 0,
     deliveredPerShift: d.avgDeliveredPerShift !== null ? d.avgDeliveredPerShift : (d.shifts > 0 ? d.totalDeliveries / d.shifts : 0),
+    keterlambatanShiftPct: (hasLateShiftData && d.lateShifts !== null && d.shifts > 0) ? d.lateShifts / d.shifts * 100 : 0,
   };
 }
 function evalTiers(value, tiers, direction){
@@ -460,19 +470,31 @@ function evalTiers(value, tiers, direction){
   const fallback = tiers.find(t => t.limit === null || t.limit === undefined);
   return fallback ? fallback.points : 0;
 }
+function isKpiActive(key, cfg){
+  if (cfg.kpis[key].optional && !hasLateShiftData) return false;
+  return true;
+}
 function totalWeight(cfg){
+  return Object.keys(cfg.kpis).reduce((s,key) => isKpiActive(key,cfg) ? s + Number(cfg.kpis[key].weight || 0) : s, 0);
+}
+function totalWeightAll(cfg){
   return Object.values(cfg.kpis).reduce((s,k) => s + Number(k.weight || 0), 0);
 }
 function computeScore(d, cfg){
   const m = computeMetrics(d);
-  const points = {
+  const rawPoints = {
     balikGudang: evalTiers(m.balikGudangPct, cfg.kpis.balikGudang.tiers, cfg.kpis.balikGudang.direction),
     telat: evalTiers(m.telatPct, cfg.kpis.telat.tiers, cfg.kpis.telat.direction),
     barangSalah: evalTiers(m.barangSalahRate, cfg.kpis.barangSalah.tiers, cfg.kpis.barangSalah.direction),
     delivered: evalTiers(m.deliveredPerShift, cfg.kpis.delivered.tiers, cfg.kpis.delivered.direction),
+    keterlambatanShift: evalTiers(m.keterlambatanShiftPct, cfg.kpis.keterlambatanShift.tiers, cfg.kpis.keterlambatanShift.direction),
   };
   const tw = totalWeight(cfg) || 1;
-  const skor = Object.keys(points).reduce((sum,key) => sum + points[key] * Number(cfg.kpis[key].weight || 0), 0) / tw;
+  const skor = Object.keys(rawPoints).reduce((sum,key) => {
+    if (!isKpiActive(key,cfg)) return sum;
+    return sum + rawPoints[key] * Number(cfg.kpis[key].weight || 0);
+  }, 0) / tw;
+  const points = { ...rawPoints };
   const eligible = d.shifts >= cfg.minShift;
   const lolos = eligible && skor >= cfg.passingScore;
   return { metrics: m, points, skor, eligible, lolos, insentif: lolos ? cfg.incentiveAmount : 0 };
@@ -518,11 +540,11 @@ function renderAll(){
 }
 
 function renderWeightWarning(){
-  const tw = totalWeight(config);
+  const twAll = totalWeightAll(config);
   const el = document.getElementById("weightWarning");
-  if (Math.abs(tw - 100) > 0.01){
+  if (Math.abs(twAll - 100) > 0.01){
     el.style.display = "flex";
-    el.querySelector("span").textContent = `Total bobot saat ini ${fmtNum(tw,2)}%. Skor tetap dihitung (dinormalisasi otomatis), tapi sebaiknya disesuaikan ke 100% agar bobot antar KPI sesuai rencana.`;
+    el.querySelector("span").textContent = `Total bobot yang dikonfigurasi saat ini ${fmtNum(twAll,2)}%. Skor tetap dihitung (dinormalisasi otomatis), tapi sebaiknya disesuaikan ke 100% agar bobot antar KPI sesuai rencana.`;
   } else {
     el.style.display = "none";
   }
@@ -565,12 +587,16 @@ function renderConfigPanel(){
         </label>
       </div>
       <div class="card">
-        <h3>Bobot KPI <span class="weight-total ${Math.abs(tw-100)>0.01 ? 'weight-bad':'weight-good'}">Total: ${fmtNum(tw,2)}%</span></h3>
-        ${Object.entries(config.kpis).map(([key,k]) => `
+        <h3>Bobot KPI <span class="weight-total ${Math.abs(tw-100)>0.01 ? 'weight-bad':'weight-good'}">Total Aktif: ${fmtNum(tw,2)}%</span></h3>
+        ${Object.entries(config.kpis).map(([key,k]) => {
+          const active = isKpiActive(key, config);
+          return `
           <label class="field field-inline">
-            <span>${k.label}</span>
+            <span>${k.label}${!active ? '<span class="kpi-inactive-tag">Tidak Aktif</span>' : ''}</span>
             <input type="number" step="any" class="weight-input" data-kpi="${key}" value="${k.weight}" min="0" max="100">%
-          </label>`).join("")}
+          </label>`;
+        }).join("")}
+        <p style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">"Tidak Aktif" muncul kalau CSV yang diimpor untuk outlet ini belum punya kolom <code>total_late_shifts</code> — bobotnya otomatis dialihkan ke KPI lain, tidak perlu diubah manual.</p>
       </div>
     </div>
     <div class="card" style="margin-top:14px;">
@@ -665,6 +691,9 @@ function kpiCellHTML(value, unit, points){
   const pClass = points >= 80 ? "pt-good" : points >= 60 ? "pt-mid" : "pt-bad";
   return `<div class="kpi-cell"><span class="kpi-val">${fmtNum(value,1)}${unit === "%" ? "%" : ""}</span><span class="kpi-pt ${pClass}">${points}pt</span></div>`;
 }
+function kpiCellNAHTML(){
+  return `<div class="kpi-cell"><span class="kpi-val kpi-na">N/A</span><span class="kpi-pt">tdk ada data</span></div>`;
+}
 
 function renderTable(){
   const list = computedList();
@@ -705,6 +734,7 @@ function renderTable(){
           <th class="print-hide">Telat</th>
           <th class="print-hide">Barang Salah</th>
           <th class="print-hide">Delivered/Shift</th>
+          <th class="print-hide">Telat Shift</th>
           <th class="col-skor">Skor Akhir</th>
           <th class="col-status">Status</th>
           <th class="col-insentif">Insentif</th>
@@ -722,6 +752,7 @@ function renderTable(){
             <td class="print-hide">${kpiCellHTML(m.telatPct, "%", r.points.telat)}</td>
             <td class="print-hide">${kpiCellHTML(m.barangSalahRate, "", r.points.barangSalah)}</td>
             <td class="print-hide">${kpiCellHTML(m.deliveredPerShift, "", r.points.delivered)}</td>
+            <td class="print-hide">${hasLateShiftData ? kpiCellHTML(m.keterlambatanShiftPct, "%", r.points.keterlambatanShift) : kpiCellNAHTML()}</td>
             <td class="col-skor"><span class="skor-badge">${fmtNum(r.skor,1)}</span></td>
             <td class="col-status">${stampHTML(r)}</td>
             <td class="col-insentif">${r.lolos ? `<span class="rp">${fmtRp(r.insentif)}</span>` : `<span class="rp rp-zero">—</span>`}</td>
@@ -730,6 +761,7 @@ function renderTable(){
       </tbody>
     </table>
   `;
+
 
   if (inelig.length === 0){
     ineligContainer.innerHTML = "";
@@ -758,9 +790,13 @@ function handleCSVImport(file){
       alert("Kolom berikut tidak ditemukan di file CSV:\n" + missing.join(", "));
       return;
     }
+    hasLateShiftData = headers.includes("total_late_shifts");
     drivers = rows.map(mapDriver).filter(d => d.name && d.name !== "(Tanpa Nama)" || d.shifts > 0 || d.totalDeliveries > 0);
     if (rows.length && rows[0].range_start) periodeStart = rows[0].range_start;
     if (rows.length && rows[0].range_end) periodeEnd = rows[0].range_end;
+    if (!hasLateShiftData){
+      alert("Info: file CSV ini belum punya kolom 'total_late_shifts'. KPI Keterlambatan Datang Shift akan di-nonaktifkan sementara untuk data outlet ini, dan bobotnya otomatis dialihkan ke KPI lain.");
+    }
     saveState();
   };
   reader.readAsText(file);
